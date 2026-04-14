@@ -70,6 +70,8 @@ export function handleGrassConnection(ws: WebSocket): void {
         pending.res.writeHead(frame.statusCode, {
           ...frame.headers,
           'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
         });
         pending.headersSent = true;
         pending.isSSE = (frame.headers['content-type'] ?? '').includes('text/event-stream');
@@ -95,7 +97,12 @@ export function handleGrassConnection(ws: WebSocket): void {
     if (frame.type === 'error') {
       console.warn(`[grass] error for requestId=${frame.requestId}: ${frame.message}`);
       if (!pending.headersSent) {
-        pending.res.writeHead(502, { 'Content-Type': 'application/json' });
+        pending.res.writeHead(502, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
+          'Content-Type': 'application/json',
+        });
       }
       if (!pending.res.writableEnded) {
         if (pending.isSSE) {
@@ -114,7 +121,12 @@ export function handleGrassConnection(ws: WebSocket): void {
     // Fail all pending requests
     for (const [, pending] of session.pending) {
       if (!pending.headersSent) {
-        pending.res.writeHead(502, { 'Content-Type': 'application/json' });
+        pending.res.writeHead(502, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
+          'Content-Type': 'application/json',
+        });
       }
       if (!pending.res.writableEnded) {
         if (pending.isSSE) {
@@ -137,20 +149,22 @@ export function handleAppRequest(req: http.IncomingMessage, res: http.ServerResp
   const url = req.url ?? '/';
   const method = req.method ?? 'GET';
 
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
+  };
+
   // CORS preflight
   if (method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token',
-    });
+    res.writeHead(204, cors);
     res.end();
     return;
   }
 
   // Health check (no token required)
   if (method === 'GET' && url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...cors, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
     return;
   }
@@ -158,7 +172,7 @@ export function handleAppRequest(req: http.IncomingMessage, res: http.ServerResp
   // Extract token from path prefix: /s/<token>/rest/of/path
   const tokenMatch = url.match(/^\/s\/([^/]+)(\/.*)?$/);
   if (!tokenMatch) {
-    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.writeHead(400, { ...cors, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Missing relay token. Use /s/<token>/... paths.' }));
     return;
   }
@@ -168,13 +182,13 @@ export function handleAppRequest(req: http.IncomingMessage, res: http.ServerResp
 
   const session = getSession(token);
   if (!session) {
-    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.writeHead(404, { ...cors, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'No GRASS server connected for this token.' }));
     return;
   }
 
   if (session.ws.readyState !== WebSocket.OPEN) {
-    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.writeHead(502, { ...cors, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'GRASS server connection is not open.' }));
     return;
   }
@@ -227,7 +241,7 @@ export function handleAppRequest(req: http.IncomingMessage, res: http.ServerResp
     } catch (err: any) {
       session.pending.delete(requestId);
       if (!res.headersSent) {
-        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.writeHead(502, { ...cors, 'Content-Type': 'application/json' });
       }
       if (!res.writableEnded) {
         res.end(JSON.stringify({ error: `Failed to forward to GRASS: ${err.message}` }));
