@@ -71,7 +71,7 @@ export function handleGrassConnection(ws: WebSocket): void {
           ...frame.headers,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
         });
         pending.headersSent = true;
         pending.isSSE = (frame.headers['content-type'] ?? '').includes('text/event-stream');
@@ -100,7 +100,7 @@ export function handleGrassConnection(ws: WebSocket): void {
         pending.res.writeHead(502, {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
           'Content-Type': 'application/json',
         });
       }
@@ -124,7 +124,7 @@ export function handleGrassConnection(ws: WebSocket): void {
         pending.res.writeHead(502, {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
           'Content-Type': 'application/json',
         });
       }
@@ -152,7 +152,7 @@ export function handleAppRequest(req: http.IncomingMessage, res: http.ServerResp
   const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
   };
 
   // CORS preflight
