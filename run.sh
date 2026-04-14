@@ -7,7 +7,7 @@ source ~/.bashrc
 nvm use v24
 node --version
 
-cd /home/grass/relay
+cd /home/grass/relay/source
 # Build requires TypeScript toolchain from devDependencies.
 npm i --include=dev
 npm run build
