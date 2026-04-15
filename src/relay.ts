@@ -38,12 +38,32 @@ export function handleGrassConnection(ws: WebSocket): void {
         return;
       }
 
-      if (getSession(token)) {
-        console.warn(`[grass] token already in use: ${token}`);
-        const errFrame: RelayToGrassFrame = { type: 'register_error', reason: 'Token already in use by another active session' };
-        ws.send(JSON.stringify(errFrame));
-        ws.close();
-        return;
+      const existing = getSession(token);
+      if (existing) {
+        if (existing.ws.readyState === WebSocket.OPEN || existing.ws.readyState === WebSocket.CONNECTING) {
+          // Old connection is still alive — evict it so the restarted container can take over.
+          console.warn(`[grass] token=${token} already has an active connection; evicting old session for reconnect`);
+          // Fail any pending requests on the old session before dropping it.
+          for (const [, pending] of existing.pending) {
+            if (!pending.headersSent) {
+              pending.res.writeHead(502, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
+                'Content-Type': 'application/json',
+              });
+            }
+            if (!pending.res.writableEnded) {
+              pending.res.end(JSON.stringify({ error: 'relay reconnected' }));
+            }
+          }
+          existing.ws.terminate();
+          deleteSession(token);
+        } else {
+          // WebSocket is CLOSING or CLOSED but the close event hasn't fired yet — clean it up now.
+          console.warn(`[grass] token=${token} stale session (readyState=${existing.ws.readyState}); replacing`);
+          deleteSession(token);
+        }
       }
 
       session = createSession(ws, token);
@@ -117,6 +137,15 @@ export function handleGrassConnection(ws: WebSocket): void {
 
   ws.on('close', () => {
     if (!session) return; // never registered — nothing to clean up
+
+    // Guard: if this session was evicted and the token re-registered by a new WS,
+    // don't delete the new session from the store.
+    const current = getSession(session.token);
+    if (current && current.ws !== ws) {
+      console.log(`[grass] close event for evicted WS (token=${session.token}); skipping deleteSession`);
+      return;
+    }
+
     console.log(`[grass] disconnected — token=${session.token}`);
     // Fail all pending requests
     for (const [, pending] of session.pending) {
