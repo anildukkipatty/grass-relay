@@ -85,15 +85,22 @@ export function handleGrassConnection(ws: WebSocket): void {
     if (frame.type === 'push_notification') {
       const grassApiUrl = config.grass_api_url;
       const relaySecret = config.relay_secret;
-      if (grassApiUrl && relaySecret) {
-        fetch(`${grassApiUrl}/notifications/internal`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-relay-secret': relaySecret },
-          body: JSON.stringify({ token: session.token, title: frame.title, body: frame.body, data: frame.data }),
-        }).catch((err) => {
-          console.error(`[relay] failed to forward push_notification: ${err.message}`);
-        });
+      console.log(`[push] received push_notification frame from token=${session.token}`);
+      if (!grassApiUrl || !relaySecret) {
+        console.error(`[push] SKIP: grass_api_url=${grassApiUrl} relay_secret=${relaySecret ? 'set' : 'MISSING'}`);
+        return;
       }
+      console.log(`[push] forwarding to ${grassApiUrl}/notifications/internal`);
+      fetch(`${grassApiUrl}/notifications/internal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-relay-secret': relaySecret },
+        body: JSON.stringify({ token: session.token, title: frame.title, body: frame.body, data: frame.data }),
+      }).then(async (res) => {
+        const text = await res.text();
+        console.log(`[push] grass-api responded: ${res.status} ${text}`);
+      }).catch((err) => {
+        console.error(`[push] failed to forward push_notification: ${err.message}`);
+      });
       return;
     }
 
