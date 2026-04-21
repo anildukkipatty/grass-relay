@@ -3,6 +3,9 @@ import http from 'node:http';
 import { randomUUID } from 'crypto';
 import { createSession, getSession, deleteSession, PendingRequest } from './session-store';
 import { GrassToRelayFrame, RelayToGrassFrame } from './types';
+import { config } from './config';
+
+const ALLOWED_HEADERS = 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning';
 
 // --- GRASS-facing WebSocket handler ---
 
@@ -49,7 +52,7 @@ export function handleGrassConnection(ws: WebSocket): void {
               pending.res.writeHead(502, {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
+                'Access-Control-Allow-Headers': ALLOWED_HEADERS,
                 'Content-Type': 'application/json',
               });
             }
@@ -79,6 +82,21 @@ export function handleGrassConnection(ws: WebSocket): void {
       return;
     }
 
+    if (frame.type === 'push_notification') {
+      const grassApiUrl = config.grass_api_url;
+      const relaySecret = config.relay_secret;
+      if (grassApiUrl && relaySecret) {
+        fetch(`${grassApiUrl}/notifications/internal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-relay-secret': relaySecret },
+          body: JSON.stringify({ token: session.token, title: frame.title, body: frame.body, data: frame.data }),
+        }).catch((err) => {
+          console.error(`[relay] failed to forward push_notification: ${err.message}`);
+        });
+      }
+      return;
+    }
+
     const pending = session.pending.get(frame.requestId);
     if (!pending) {
       // Can happen if the app closed the connection before GRASS responded
@@ -91,7 +109,7 @@ export function handleGrassConnection(ws: WebSocket): void {
           ...frame.headers,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
+          'Access-Control-Allow-Headers': ALLOWED_HEADERS,
         });
         pending.headersSent = true;
         pending.isSSE = (frame.headers['content-type'] ?? '').includes('text/event-stream');
@@ -120,7 +138,7 @@ export function handleGrassConnection(ws: WebSocket): void {
         pending.res.writeHead(502, {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
+          'Access-Control-Allow-Headers': ALLOWED_HEADERS,
           'Content-Type': 'application/json',
         });
       }
@@ -153,7 +171,7 @@ export function handleGrassConnection(ws: WebSocket): void {
         pending.res.writeHead(502, {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
+          'Access-Control-Allow-Headers': ALLOWED_HEADERS,
           'Content-Type': 'application/json',
         });
       }
@@ -181,7 +199,7 @@ export function handleAppRequest(req: http.IncomingMessage, res: http.ServerResp
   const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Last-Event-ID, X-Relay-Token, Authorization, X-Client-Version, X-Daytona-Skip-Preview-Warning',
+    'Access-Control-Allow-Headers': ALLOWED_HEADERS,
   };
 
   // CORS preflight
