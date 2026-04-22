@@ -60,7 +60,7 @@ export function handleGrassConnection(ws: WebSocket): void {
               pending.res.end(JSON.stringify({ error: 'relay reconnected' }));
             }
           }
-          existing.ws.terminate();
+          existing.ws.close(4000, "replaced");
           deleteSession(token);
         } else {
           // WebSocket is CLOSING or CLOSED but the close event hasn't fired yet — clean it up now.
